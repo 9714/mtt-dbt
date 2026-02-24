@@ -1,8 +1,3 @@
-locals {
-  config = var.environments[var.env]
-  prefix = var.env == "prd" ? var.client_name : "${var.client_name}-${var.env}"
-}
-
 # ---------------------------------------------------------------------------
 # Service Account: dbt 実行用 SA
 # ---------------------------------------------------------------------------
@@ -10,6 +5,13 @@ resource "google_service_account" "dbt" {
   project      = local.config.project_id
   account_id   = "${local.prefix}-dbt"
   display_name = "dbt SA (${var.env})"
+}
+
+# GitHub Actions（WIF）が dbt SA を直接使用できるよう Workload Identity User 権限を付与
+resource "google_service_account_iam_member" "dbt_wi_user" {
+  service_account_id = google_service_account.dbt.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = var.wif_principal
 }
 
 # ---------------------------------------------------------------------------
