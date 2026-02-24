@@ -57,7 +57,7 @@ jobs:
       - name: SQLFluff lint
         run: |
           pip install sqlfluff sqlfluff-templater-dbt
-          sqlfluff lint models/ --dialect bigquery
+          sqlfluff lint models/ --dialect bigquery --templater jinja
 
       - name: dbt compile (dev)
         run: dbt compile --target dev
