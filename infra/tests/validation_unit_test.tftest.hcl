@@ -3,8 +3,9 @@
 
 mock_provider "google" {}
 
-mock_data "terraform_remote_state" "infra" {
-  defaults = {
+override_data {
+  target = data.terraform_remote_state.infra
+  values = {
     outputs = {
       dbt_sa_email = "dbt@mtt-dev.iam.gserviceaccount.com"
     }
