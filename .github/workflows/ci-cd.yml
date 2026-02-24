@@ -223,6 +223,9 @@ jobs:
       - name: Install dbt packages
         run: dbt deps
 
+      - name: dbt seed (dev)
+        run: dbt seed --target dev --vars '{"load_source_data": true}'
+
       - name: dbt run (dev)
         run: dbt run --target dev
 
@@ -315,6 +318,9 @@ jobs:
       - name: Install dbt packages
         run: dbt deps
 
+      - name: dbt seed (stg)
+        run: dbt seed --target stg --vars '{"load_source_data": true}'
+
       - name: dbt run (stg)
         run: dbt run --target stg
 
@@ -406,6 +412,9 @@ jobs:
 
       - name: Install dbt packages
         run: dbt deps
+
+      - name: dbt seed (prd)
+        run: dbt seed --target prd --vars '{"load_source_data": true}'
 
       - name: dbt run (prd)
         run: dbt run --target prd
