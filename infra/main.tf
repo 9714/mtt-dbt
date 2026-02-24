@@ -15,9 +15,24 @@ resource "google_service_account_iam_member" "dbt_wi_user" {
 }
 
 # ---------------------------------------------------------------------------
+# BigQuery
+# BigQuery はデータセットを自動作成しないため、dbt が使用するデータセットを事前作成する。
+# ---------------------------------------------------------------------------
+
+resource "google_bigquery_dataset" "dbt" {
+  for_each   = local.bq_datasets
+  project    = local.config.project_id
+  dataset_id = each.value
+  location   = "US" # dbt profiles の location と一致させる
+
+  labels = {
+    env        = var.env
+    managed_by = "terraform"
+  }
+}
+
+# ---------------------------------------------------------------------------
 # BigQuery IAM
-# データセットは dbt run 時に自動作成される（location は US）。
-# Terraform ではプロジェクトレベルの IAM のみ管理する。
 # ---------------------------------------------------------------------------
 
 # dbt SA にプロジェクトレベルの BigQuery Job User を付与（クエリ実行に必要）

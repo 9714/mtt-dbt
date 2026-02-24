@@ -152,6 +152,21 @@ terraform -chdir=infra apply \
 | `feature-*` → `main` へマージ | stg | Terraform apply（stg）を自動実行 |
 | タグ付け（例: `v1.2.3`） | prd | Terraform apply（prd）を自動実行 |
 
+### profiles.yml のセットアップ（ローカル開発）
+
+`profiles.yml` は gitignore されているため、`profiles.template.yml` をコピーして作成する。
+
+```shell
+cp profiles.template.yml profiles.yml
+```
+
+`profiles.yml` を編集し、以下を設定する:
+
+| 項目 | 説明 |
+|------|------|
+| `project` | GCP プロジェクト ID（例: sandbox-nonprd） |
+| `dataset` | 個人識別子（例: sato）。データセットが `mtt_raw_sato`, `mtt_staging_sato` のように個人別になる |
+
 ### dbt の日常開発
 
 ```shell

@@ -73,8 +73,8 @@ gcloud storage buckets create gs://mtt-dbt-tfstate-dev \
 
 ## BigQuery 設計方針
 
-- データセットは `dbt run` 時に自動作成されるため Terraform では管理しない（location は US のまま運用）
-- Terraform ではプロジェクトレベルの IAM のみ管理する
+- BigQuery はデータセットを自動作成しないため、dbt が使用するデータセット（raw / staging / marts）を Terraform で事前作成する（location は US）
+- Terraform ではプロジェクトレベルの IAM も管理する
   - `bigquery.jobUser`（クエリ実行）
   - `bigquery.dataEditor`（全データセットへの読み書き）
 - BI ツール等の参照権限が必要になった場合は `infra/main.tf` に `google_bigquery_dataset_iam_member` を個別追加する
