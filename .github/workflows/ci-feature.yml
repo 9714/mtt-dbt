@@ -168,8 +168,8 @@ jobs:
     name: dbt run & test / dev
     if: >-
       needs.changes.outputs.dbt == 'true' &&
-      (needs.tf-apply-dev.result == 'success' || needs.tf-apply-dev.result == 'skipped')
-    needs: [changes, tf-apply-dev]
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped')
+    needs: [changes, lint]
     runs-on: ubuntu-latest
     permissions:
       contents: read
