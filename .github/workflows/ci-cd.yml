@@ -1,23 +1,9 @@
-name: CD
-
-# ---------------------------------------------------------------------------
-# dev: CI（dbt CI / Terraform CI）完了後に実行
-# stg: main マージ時に push トリガーで実行
-# prd: タグ付け（v*）時に push トリガーで実行
-# ---------------------------------------------------------------------------
+name: CI/CD
 
 on:
-  workflow_run:
-    workflows:
-      - "dbt CI"
-      - "Terraform CI"
-    types:
-      - completed
-    branches:
-      - "feature-*"
-
   push:
     branches:
+      - "feature-*"
       - main
     tags:
       - "v*"
@@ -31,29 +17,73 @@ on:
       - "dbt_project.yml"
       - "packages.yml"
       - "package-lock.yml"
+      - ".sqlfluff"
       - ".github/workflows/**"
 
-  workflow_dispatch:
-    inputs:
-      env:
-        description: "デプロイ対象環境"
-        required: true
-        type: choice
-        options:
-          - dev
-          - stg
-          - prd
-
 # ---------------------------------------------------------------------------
-# dev: CI 完了後（feature-* ブランチ）
+# feature-*: lint → tf-validate → tf-plan → tf-apply/dev → dbt-run/dev
+# main:      tf-apply/stg → dbt-run/stg
+# v* tag:    tf-apply/prd → dbt-run/prd
 # ---------------------------------------------------------------------------
 jobs:
-  tf-apply-dev:
-    name: tf apply / dev
-    if: >
-      github.event_name == 'workflow_run' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'feature-')
+
+  # ---------- CI: feature-* のみ（並列） ----------
+
+  lint:
+    name: SQLFluff lint
+    if: startsWith(github.ref, 'refs/heads/feature-')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: SQLFluff lint
+        run: |
+          pip install "sqlfluff==3.3.1" "sqlfluff-templater-dbt==3.3.1"
+          sqlfluff lint models/ --dialect bigquery --templater jinja --ignore parsing,templating
+
+  tf-validate:
+    name: tf fmt / validate
+    if: startsWith(github.ref, 'refs/heads/feature-')
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive -diff .
+
+      - name: Terraform Init (backend なし)
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+  tf-plan-dev:
+    name: tf plan / dev
+    if: startsWith(github.ref, 'refs/heads/feature-')
+    needs: [lint, tf-validate]
     runs-on: ubuntu-latest
 
     permissions:
@@ -67,8 +97,53 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+          token_format: "access_token"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+
+      - name: Terraform Init (dev)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET_DEV }}" \
+            -reconfigure \
+            -input=false
+
+      - name: Terraform Plan (dev)
+        run: |
+          terraform plan \
+            -var-file=config.tfvars \
+            -var="env=dev" \
+            -no-color \
+            -input=false
+
+  # ---------- CD dev: feature-* ----------
+
+  tf-apply-dev:
+    name: tf apply / dev
+    needs: tf-plan-dev
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -114,8 +189,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: profiles.ci.yml を profiles.yml としてコピー
         run: cp profiles.ci.yml profiles.yml
@@ -144,12 +217,11 @@ jobs:
       - name: dbt test (dev)
         run: dbt test --target dev
 
-# ---------------------------------------------------------------------------
-# stg: main マージ
-# ---------------------------------------------------------------------------
+  # ---------- CD stg: main ----------
+
   tf-apply-stg:
     name: tf apply / stg
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     permissions:
@@ -236,12 +308,11 @@ jobs:
       - name: dbt test (stg)
         run: dbt test --target stg
 
-# ---------------------------------------------------------------------------
-# prd: タグ付け（v*）
-# ---------------------------------------------------------------------------
+  # ---------- CD prd: v* tag ----------
+
   tf-apply-prd:
     name: tf apply / prd
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
 
     permissions:
