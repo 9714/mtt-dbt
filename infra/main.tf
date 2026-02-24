@@ -11,7 +11,7 @@ resource "google_service_account" "dbt" {
 resource "google_service_account_iam_member" "dbt_wi_user" {
   service_account_id = google_service_account.dbt.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = var.wif_principal
+  member             = local.wif_principal
 }
 
 # ---------------------------------------------------------------------------

@@ -18,20 +18,11 @@ variable "env" {
   }
 }
 
-variable "wif_principal" {
-  description = "GitHub Actions WIF の principal（例: principalSet://iam.googleapis.com/projects/.../attribute.repository/org/repo）"
-  type        = string
-
-  validation {
-    condition     = can(regex("^principalSet://iam\\.googleapis\\.com/", var.wif_principal))
-    error_message = "wif_principal は 'principalSet://iam.googleapis.com/' で始まる必要があります。"
-  }
-}
-
 variable "environments" {
   description = "環境ごとの設定マップ"
   type = map(object({
-    project_id = string
-    location   = string
+    project_id    = string
+    location      = string
+    wif_principal = string
   }))
 }

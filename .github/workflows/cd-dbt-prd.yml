@@ -26,8 +26,8 @@ jobs:
         run: cp profiles.ci.yml profiles.yml
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.DBT_SA_EMAIL }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER_PRD }}
+          service_account: ${{ secrets.DBT_SA_EMAIL_PRD }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
