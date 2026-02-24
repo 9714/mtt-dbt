@@ -17,6 +17,7 @@ on:
       - "dbt_project.yml"
       - "packages.yml"
       - "package-lock.yml"
+      - ".github/workflows/**"
 
 # ---------------------------------------------------------------------------
 # dev: feature-* push
