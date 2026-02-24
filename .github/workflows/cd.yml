@@ -1,9 +1,23 @@
 name: CD
 
+# ---------------------------------------------------------------------------
+# dev: CI（dbt CI / Terraform CI）完了後に実行
+# stg: main マージ時に push トリガーで実行
+# prd: タグ付け（v*）時に push トリガーで実行
+# ---------------------------------------------------------------------------
+
 on:
-  push:
+  workflow_run:
+    workflows:
+      - "dbt CI"
+      - "Terraform CI"
+    types:
+      - completed
     branches:
       - "feature-*"
+
+  push:
+    branches:
       - main
     tags:
       - "v*"
@@ -20,12 +34,15 @@ on:
       - ".github/workflows/**"
 
 # ---------------------------------------------------------------------------
-# dev: feature-* push
+# dev: CI 完了後（feature-* ブランチ）
 # ---------------------------------------------------------------------------
 jobs:
   tf-apply-dev:
     name: tf apply / dev
-    if: startsWith(github.ref, 'refs/heads/feature-')
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'feature-')
     runs-on: ubuntu-latest
 
     permissions:
@@ -39,6 +56,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -85,6 +104,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: profiles.ci.yml を profiles.yml としてコピー
         run: cp profiles.ci.yml profiles.yml
@@ -118,7 +139,7 @@ jobs:
 # ---------------------------------------------------------------------------
   tf-apply-stg:
     name: tf apply / stg
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     permissions:
@@ -211,7 +232,7 @@ jobs:
 # ---------------------------------------------------------------------------
   tf-apply-prd:
     name: tf apply / prd
-    if: github.ref_type == 'tag'
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
 
     permissions:
