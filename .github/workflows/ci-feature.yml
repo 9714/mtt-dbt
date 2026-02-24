@@ -1,0 +1,200 @@
+name: CI / feature
+
+# feature-* ブランチへの push で起動
+# lint → tf-validate → tf-plan-dev → tf-apply-dev → dbt-run-dev
+
+on:
+  push:
+    branches:
+      - "feature-*"
+    paths:
+      - "infra/**"
+      - "models/**"
+      - "macros/**"
+      - "seeds/**"
+      - "data-tests/**"
+      - "snapshots/**"
+      - "dbt_project.yml"
+      - "packages.yml"
+      - "package-lock.yml"
+      - ".sqlfluff"
+      - ".github/workflows/**"
+
+jobs:
+
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tf: ${{ steps.filter.outputs.tf }}
+      dbt: ${{ steps.filter.outputs.dbt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            tf:
+              - 'infra/**'
+            dbt:
+              - 'models/**'
+              - 'macros/**'
+              - 'seeds/**'
+              - 'data-tests/**'
+              - 'snapshots/**'
+              - 'dbt_project.yml'
+              - 'packages.yml'
+              - 'package-lock.yml'
+              - '.sqlfluff'
+
+  lint:
+    name: SQLFluff lint
+    if: needs.changes.outputs.dbt == 'true'
+    needs: [changes]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: SQLFluff lint
+        run: |
+          pip install "sqlfluff==3.3.1" "sqlfluff-templater-dbt==3.3.1"
+          sqlfluff lint models/ --dialect bigquery --templater jinja --ignore parsing,templating
+
+  tf-validate:
+    name: tf fmt / validate
+    if: needs.changes.outputs.tf == 'true'
+    needs: [changes]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive -diff .
+      - name: Terraform Init (backend なし)
+        run: terraform init -backend=false -input=false
+      - name: Terraform Validate
+        run: terraform validate
+
+  tf-plan-dev:
+    name: tf plan / dev
+    if: >-
+      needs.changes.outputs.tf == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.tf-validate.result == 'success' || needs.tf-validate.result == 'skipped')
+    needs: [changes, lint, tf-validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+          token_format: "access_token"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+      - name: Terraform Init (dev)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET_DEV }}" \
+            -reconfigure \
+            -input=false
+      - name: Terraform Plan (dev)
+        run: |
+          terraform plan \
+            -var-file=config.tfvars \
+            -var="env=dev" \
+            -no-color \
+            -input=false
+
+  tf-apply-dev:
+    name: tf apply / dev
+    if: >-
+      needs.changes.outputs.tf == 'true' &&
+      needs.tf-plan-dev.result == 'success'
+    needs: [changes, tf-plan-dev]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+          token_format: "access_token"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+      - name: Terraform Init (dev)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET_DEV }}" \
+            -reconfigure \
+            -input=false
+      - name: Terraform Apply (dev)
+        run: |
+          terraform apply \
+            -var-file=config.tfvars \
+            -var="env=dev" \
+            -auto-approve \
+            -input=false
+
+  dbt-run-dev:
+    name: dbt run & test / dev
+    if: >-
+      needs.changes.outputs.dbt == 'true' &&
+      (needs.tf-apply-dev.result == 'success' || needs.tf-apply-dev.result == 'skipped')
+    needs: [changes, tf-apply-dev]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DBT_PROFILES_DIR: .
+      DBT_TARGET: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: profiles.ci.yml を profiles.yml としてコピー
+        run: cp profiles.ci.yml profiles.yml
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DBT_SA_EMAIL_DEV }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dbt
+        run: pip install dbt-bigquery
+      - name: Install dbt packages
+        run: dbt deps
+      - name: dbt seed (dev)
+        run: "dbt seed --target dev --vars '{\"load_source_data\": true}'"
+      - name: dbt run (dev)
+        run: dbt run --target dev
+      - name: dbt test (dev)
+        run: dbt test --target dev
