@@ -8,7 +8,7 @@ default:
       type: bigquery
       method: oauth
       project: YOUR_GCP_PROJECT_ID
-      dataset: sato                 # 個人識別子。CI では dev/stg/prd、ローカルでは sato など
+      dataset: YOUR_NAME                 # 個人識別子。CI では dev/stg/prd、ローカルでは sato など
       location: US
       threads: 4
       job_execution_timeout_seconds: 300
