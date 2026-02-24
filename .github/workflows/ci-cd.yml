@@ -38,11 +38,52 @@ on:
 # ---------------------------------------------------------------------------
 jobs:
 
+  # ---------- 変更パス検出（全トリガー共通） ----------
+
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tf: ${{ steps.override.outputs.tf || steps.filter.outputs.tf }}
+      dbt: ${{ steps.override.outputs.dbt || steps.filter.outputs.dbt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Override outputs for workflow_dispatch
+        id: override
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "tf=true" >> $GITHUB_OUTPUT
+          echo "dbt=true" >> $GITHUB_OUTPUT
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            tf:
+              - 'infra/**'
+            dbt:
+              - 'models/**'
+              - 'macros/**'
+              - 'seeds/**'
+              - 'data-tests/**'
+              - 'snapshots/**'
+              - 'dbt_project.yml'
+              - 'packages.yml'
+              - 'package-lock.yml'
+              - '.sqlfluff'
+
   # ---------- CI: feature-* のみ（並列） ----------
 
   lint:
     name: SQLFluff lint
-    if: startsWith(github.ref, 'refs/heads/feature-')
+    if: >-
+      startsWith(github.ref, 'refs/heads/feature-') &&
+      needs.changes.outputs.dbt == 'true'
+    needs: [changes]
     runs-on: ubuntu-latest
 
     permissions:
@@ -64,7 +105,10 @@ jobs:
 
   tf-validate:
     name: tf fmt / validate
-    if: startsWith(github.ref, 'refs/heads/feature-')
+    if: >-
+      startsWith(github.ref, 'refs/heads/feature-') &&
+      needs.changes.outputs.tf == 'true'
+    needs: [changes]
     runs-on: ubuntu-latest
 
     defaults:
@@ -92,8 +136,12 @@ jobs:
 
   tf-plan-dev:
     name: tf plan / dev
-    if: startsWith(github.ref, 'refs/heads/feature-')
-    needs: [lint, tf-validate]
+    if: >-
+      startsWith(github.ref, 'refs/heads/feature-') &&
+      needs.changes.outputs.tf == 'true' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      (needs.tf-validate.result == 'success' || needs.tf-validate.result == 'skipped')
+    needs: [changes, lint, tf-validate]
     runs-on: ubuntu-latest
 
     permissions:
@@ -141,9 +189,12 @@ jobs:
   tf-apply-dev:
     name: tf apply / dev
     if: >-
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature-') && needs.tf-plan-dev.result == 'success') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'dev')
-    needs: [tf-plan-dev]
+      needs.changes.outputs.tf == 'true' &&
+      (
+        (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature-') && needs.tf-plan-dev.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'dev')
+      )
+    needs: [changes, tf-plan-dev]
     runs-on: ubuntu-latest
 
     permissions:
@@ -188,7 +239,14 @@ jobs:
 
   dbt-run-dev:
     name: dbt run & test / dev
-    needs: tf-apply-dev
+    if: >-
+      needs.changes.outputs.dbt == 'true' &&
+      (needs.tf-apply-dev.result == 'success' || needs.tf-apply-dev.result == 'skipped') &&
+      (
+        (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature-')) ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'dev')
+      )
+    needs: [changes, tf-apply-dev]
     runs-on: ubuntu-latest
 
     permissions:
@@ -237,8 +295,12 @@ jobs:
   tf-apply-stg:
     name: tf apply / stg
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'stg')
+      needs.changes.outputs.tf == 'true' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'stg')
+      )
+    needs: [changes]
     runs-on: ubuntu-latest
 
     permissions:
@@ -283,7 +345,14 @@ jobs:
 
   dbt-run-stg:
     name: dbt run & test / stg
-    needs: tf-apply-stg
+    if: >-
+      needs.changes.outputs.dbt == 'true' &&
+      (needs.tf-apply-stg.result == 'success' || needs.tf-apply-stg.result == 'skipped') &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'stg')
+      )
+    needs: [changes, tf-apply-stg]
     runs-on: ubuntu-latest
 
     permissions:
@@ -332,8 +401,12 @@ jobs:
   tf-apply-prd:
     name: tf apply / prd
     if: >-
-      (github.event_name == 'push' && github.ref_type == 'tag') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'prd')
+      needs.changes.outputs.tf == 'true' &&
+      (
+        (github.event_name == 'push' && github.ref_type == 'tag') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'prd')
+      )
+    needs: [changes]
     runs-on: ubuntu-latest
 
     permissions:
@@ -378,7 +451,14 @@ jobs:
 
   dbt-run-prd:
     name: dbt run & test / prd
-    needs: tf-apply-prd
+    if: >-
+      needs.changes.outputs.dbt == 'true' &&
+      (needs.tf-apply-prd.result == 'success' || needs.tf-apply-prd.result == 'skipped') &&
+      (
+        (github.event_name == 'push' && github.ref_type == 'tag') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'prd')
+      )
+    needs: [changes, tf-apply-prd]
     runs-on: ubuntu-latest
 
     permissions:
