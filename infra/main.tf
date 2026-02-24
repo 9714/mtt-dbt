@@ -16,13 +16,12 @@ resource "google_service_account_iam_member" "dbt_wi_user" {
 
 # ---------------------------------------------------------------------------
 # BigQuery
-# BigQuery はデータセットを自動作成しないため、dbt が使用するデータセットを事前作成する。
+# dbt seed は run より先に実行されるため、raw データセットのみ Terraform で事前作成する。
 # ---------------------------------------------------------------------------
 
-resource "google_bigquery_dataset" "dbt" {
-  for_each   = local.bq_datasets
+resource "google_bigquery_dataset" "dbt_raw" {
   project    = local.config.project_id
-  dataset_id = each.value
+  dataset_id = local.bq_raw_dataset
   location   = "US" # dbt profiles の location と一致させる
 
   labels = {
