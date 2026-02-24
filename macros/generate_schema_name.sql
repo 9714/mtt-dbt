@@ -12,8 +12,8 @@
         {{ client }}_{{ schema }}
 
     {% else %}
-        {# dev / stg / 個人: {client_name}_{schema}_{target.schema} #}
-        {{ client }}_{{ schema }}_{{ target.schema }}
+        {# dev / stg / 個人: {target.schema}_{client_name}_{schema} #}
+        {{ target.schema }}_{{ client }}_{{ schema }}
 
     {% endif %}
 
