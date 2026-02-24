@@ -45,7 +45,7 @@ gcloud storage buckets create gs://mtt-dbt-tfstate-stg \
   --uniform-bucket-level-access
 
 gcloud storage buckets create gs://mtt-dbt-tfstate-prd \
-  --project=mtt-prd \
+  --project=sandbox-488413 \
   --location=asia-northeast1 \
   --uniform-bucket-level-access
 ```
@@ -105,7 +105,7 @@ environments = {
     location   = "asia-northeast1"
   }
   prd = {
-    project_id = "mtt-prd"
+    project_id = "sandbox-488413"
     location   = "asia-northeast1"
   }
 }

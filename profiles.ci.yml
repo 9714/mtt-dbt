@@ -26,7 +26,7 @@ default:
     prd:
       type: bigquery
       method: oauth
-      project: mtt-prd
+      project: sandbox-488413
       dataset: prd
       location: US
       threads: 4
