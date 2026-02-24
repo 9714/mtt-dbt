@@ -17,7 +17,3 @@ environments = {
     location   = "asia-northeast1"
   }
 }
-
-# dbt 実行 SA のメールアドレス。
-# SA は手動作成済み。CI では -var "dbt_sa_email=..." で環境ごとに上書きされる。
-dbt_sa_email = "mtt-dev-dbt@sandbox-nonprd.iam.gserviceaccount.com"

@@ -25,9 +25,3 @@ variable "environments" {
     location   = string
   }))
 }
-
-
-variable "dbt_sa_email" {
-  description = "dbt 実行 SA のメールアドレス（CI から -var で注入）"
-  type        = string
-}

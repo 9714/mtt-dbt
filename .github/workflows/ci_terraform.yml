@@ -82,7 +82,6 @@ jobs:
           terraform plan \
             -var-file=config.tfvars \
             -var="env=dev" \
-            -var="dbt_sa_email=${{ secrets.DBT_SA_EMAIL_DEV }}" \
             -no-color \
             -out=tfplan.dev 2>&1 | tee plan_output.txt
 

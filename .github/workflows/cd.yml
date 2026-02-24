@@ -84,7 +84,6 @@ jobs:
           terraform apply \
             -var-file=config.tfvars \
             -var="env=dev" \
-            -var="dbt_sa_email=${{ secrets.DBT_SA_EMAIL_DEV }}" \
             -auto-approve \
             -input=false
 
@@ -179,7 +178,6 @@ jobs:
           terraform apply \
             -var-file=config.tfvars \
             -var="env=stg" \
-            -var="dbt_sa_email=${{ secrets.DBT_SA_EMAIL_STG }}" \
             -auto-approve \
             -input=false
 
@@ -272,7 +270,6 @@ jobs:
           terraform apply \
             -var-file=config.tfvars \
             -var="env=prd" \
-            -var="dbt_sa_email=${{ secrets.DBT_SA_EMAIL }}" \
             -auto-approve \
             -input=false
 

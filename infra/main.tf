@@ -4,6 +4,15 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
+# Service Account: dbt 実行用 SA
+# ---------------------------------------------------------------------------
+resource "google_service_account" "dbt" {
+  project      = local.config.project_id
+  account_id   = "${local.prefix}-dbt"
+  display_name = "dbt SA (${var.env})"
+}
+
+# ---------------------------------------------------------------------------
 # BigQuery IAM
 # データセットは dbt run 時に自動作成される（location は US）。
 # Terraform ではプロジェクトレベルの IAM のみ管理する。
@@ -13,14 +22,14 @@ locals {
 resource "google_project_iam_member" "dbt_bq_job_user" {
   project = local.config.project_id
   role    = "roles/bigquery.jobUser"
-  member  = "serviceAccount:${var.dbt_sa_email}"
+  member  = "serviceAccount:${google_service_account.dbt.email}"
 }
 
 # dbt SA にプロジェクトレベルの BigQuery Data Editor を付与（全データセットへの読み書きに必要）
 resource "google_project_iam_member" "dbt_bq_data_editor" {
   project = local.config.project_id
   role    = "roles/bigquery.dataEditor"
-  member  = "serviceAccount:${var.dbt_sa_email}"
+  member  = "serviceAccount:${google_service_account.dbt.email}"
 }
 
 # ---------------------------------------------------------------------------
@@ -42,7 +51,7 @@ resource "google_storage_bucket" "dbt_artifacts" {
 resource "google_storage_bucket_iam_member" "dbt_artifacts_admin" {
   bucket = google_storage_bucket.dbt_artifacts.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${var.dbt_sa_email}"
+  member = "serviceAccount:${google_service_account.dbt.email}"
 }
 
 # ---------------------------------------------------------------------------
@@ -60,5 +69,5 @@ resource "google_storage_bucket" "dbt_docs" {
 resource "google_storage_bucket_iam_member" "dbt_docs_admin" {
   bucket = google_storage_bucket.dbt_docs.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${var.dbt_sa_email}"
+  member = "serviceAccount:${google_service_account.dbt.email}"
 }

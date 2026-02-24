@@ -88,11 +88,12 @@ gcloud storage buckets create gs://mtt-dbt-tfstate-dev \
 - 両バケットとも均一アクセス制御（uniform bucket-level access）を適用する
 - dbt SA には両バケットに `storage.objectAdmin` を付与する
 
-## SA 取得方針
+## SA 管理方針
 
-- dbt SA は手動作成済みのものを使用する（`{client}-infra` リポジトリとは独立）
-- SA の email は GitHub Secrets（`DBT_SA_EMAIL_DEV` / `DBT_SA_EMAIL_STG` / `DBT_SA_EMAIL`）に登録し、CI/CD から `-var "dbt_sa_email=..."` で Terraform に注入する
-- `data "terraform_remote_state"` は使用しない
+- dbt SA はこのリポジトリの `infra/` 内で Terraform 管理する
+- `google_service_account.dbt` リソースとして定義し、`${local.prefix}-dbt` の命名規則で環境ごとに作成する
+- SA の email は `output "dbt_sa_email"` として出力する
+- `{client}-infra` リポジトリへの依存（`data "terraform_remote_state"`）は持たない
 
 ## ブランチ戦略と環境デプロイ
 
