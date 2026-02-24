@@ -4,9 +4,6 @@ name: "jaffle_shop"
 version: "3.0.0"
 require-dbt-version: ">=1.5.0"
 
-dbt-cloud:
-  project-id: 275557 # Put your project id here
-
 profile: default # Put your profile here
 
 model-paths: ["models"]
@@ -23,6 +20,8 @@ clean-targets:
 
 vars:
   "dbt_date:time_zone": "America/Los_Angeles"
+  client_name: "mtt"  # データセット名のプレフィックス。案件ごとに変更する。
+  raw_dataset: "mtt_raw"  # raw データセット名。dev/stg/prd はプロジェクトが異なるため同名で分離される。
 
 seeds:
   jaffle_shop:
@@ -34,5 +33,7 @@ models:
   jaffle_shop:
     staging:
       +materialized: view
+      +schema: staging
     marts:
       +materialized: table
+      +schema: marts

@@ -1,0 +1,16 @@
+# ローカル開発用テンプレート。コピーして profiles.yml を作成し、以下を編集する:
+#   - project: GCP プロジェクト ID
+#   - dataset: 個人識別子（例: sato）→ データセットが mtt_raw_sato, mtt_staging_sato のように個人別になる
+default:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: YOUR_GCP_PROJECT_ID
+      dataset: sato                 # 個人識別子。CI では dev/stg/prd、ローカルでは sato など
+      location: US
+      threads: 4
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive

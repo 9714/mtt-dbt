@@ -14,3 +14,10 @@ profiles.yml
 
 .ruff_cache
 __pycache__
+
+# Terraform
+infra/.terraform/
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/*.tfplan
+infra/.terraform.lock.hcl

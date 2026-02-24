@@ -1,0 +1,23 @@
+---
+description: 必要なタイミングで適切な Terraform Agent スキルを使用する
+globs: "**/*.tf, **/*.tfvars, **/*.tftest.hcl"
+alwaysApply: false
+---
+
+# Terraform Agent スキルの使い分け
+
+Terraform 関連のタスクでは、必ず該当するスキルを **Read で読み込んでから** 実行すること。
+
+## スキル選択フロー
+
+| ユーザーの意図・タスク | 使用するスキル | パス |
+|----------------------|----------------|------|
+| Terraform コードの作成・レビュー・生成、スタイル準拠 | `terraform-style-guide` | `.cursor/agents/skills/terraform-style-guide/SKILL.md` |
+| テスト作成（.tftest.hcl）、run ブロック、アサーション、モック | `terraform-test` | `.cursor/agents/skills/terraform-test/SKILL.md` |
+| モノリシック設定をモジュール化、リファクタリング | `refactor-module` | `.cursor/agents/skills/refactor-module/SKILL.md` |
+
+## 実行ルール
+
+1. **タスクに合うスキルを選ぶ**: 上記フローで該当するスキルを特定する
+2. **スキルを読み込む**: `Read` で該当 SKILL.md を開く
+3. **スキルに従って実行する**: スキル内の手順・ベストプラクティスに沿って作業する

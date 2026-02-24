@@ -1,0 +1,423 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - "feature-*"
+      - main
+    tags:
+      - "v*"
+    paths:
+      - "infra/**"
+      - "models/**"
+      - "macros/**"
+      - "seeds/**"
+      - "data-tests/**"
+      - "snapshots/**"
+      - "dbt_project.yml"
+      - "packages.yml"
+      - "package-lock.yml"
+      - ".sqlfluff"
+      - ".github/workflows/**"
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "デプロイ先の環境"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stg
+          - prd
+
+# ---------------------------------------------------------------------------
+# feature-*: lint → tf-validate → tf-plan → tf-apply/dev → dbt-run/dev
+# main:      tf-apply/stg → dbt-run/stg
+# v* tag:    tf-apply/prd → dbt-run/prd
+# ---------------------------------------------------------------------------
+jobs:
+
+  # ---------- CI: feature-* のみ（並列） ----------
+
+  lint:
+    name: SQLFluff lint
+    if: startsWith(github.ref, 'refs/heads/feature-')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: SQLFluff lint
+        run: |
+          pip install "sqlfluff==3.3.1" "sqlfluff-templater-dbt==3.3.1"
+          sqlfluff lint models/ --dialect bigquery --templater jinja --ignore parsing,templating
+
+  tf-validate:
+    name: tf fmt / validate
+    if: startsWith(github.ref, 'refs/heads/feature-')
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive -diff .
+
+      - name: Terraform Init (backend なし)
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+  tf-plan-dev:
+    name: tf plan / dev
+    if: startsWith(github.ref, 'refs/heads/feature-')
+    needs: [lint, tf-validate]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+          token_format: "access_token"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+
+      - name: Terraform Init (dev)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET_DEV }}" \
+            -reconfigure \
+            -input=false
+
+      - name: Terraform Plan (dev)
+        run: |
+          terraform plan \
+            -var-file=config.tfvars \
+            -var="env=dev" \
+            -no-color \
+            -input=false
+
+  # ---------- CD dev: feature-* ----------
+
+  tf-apply-dev:
+    name: tf apply / dev
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature-') && needs.tf-plan-dev.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'dev')
+    needs: [tf-plan-dev]
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+          token_format: "access_token"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+
+      - name: Terraform Init (dev)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET_DEV }}" \
+            -reconfigure \
+            -input=false
+
+      - name: Terraform Apply (dev)
+        run: |
+          terraform apply \
+            -var-file=config.tfvars \
+            -var="env=dev" \
+            -auto-approve \
+            -input=false
+
+  dbt-run-dev:
+    name: dbt run & test / dev
+    needs: tf-apply-dev
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      DBT_PROFILES_DIR: .
+      DBT_TARGET: dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: profiles.ci.yml を profiles.yml としてコピー
+        run: cp profiles.ci.yml profiles.yml
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DBT_SA_EMAIL_DEV }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dbt
+        run: pip install dbt-bigquery
+
+      - name: Install dbt packages
+        run: dbt deps
+
+      - name: dbt seed (dev)
+        run: "dbt seed --target dev --vars '{\"load_source_data\": true}'"
+
+      - name: dbt run (dev)
+        run: dbt run --target dev
+
+      - name: dbt test (dev)
+        run: dbt test --target dev
+
+  # ---------- CD stg: main ----------
+
+  tf-apply-stg:
+    name: tf apply / stg
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'stg')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+          token_format: "access_token"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+
+      - name: Terraform Init (stg)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET_STG }}" \
+            -reconfigure \
+            -input=false
+
+      - name: Terraform Apply (stg)
+        run: |
+          terraform apply \
+            -var-file=config.tfvars \
+            -var="env=stg" \
+            -auto-approve \
+            -input=false
+
+  dbt-run-stg:
+    name: dbt run & test / stg
+    needs: tf-apply-stg
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      DBT_PROFILES_DIR: .
+      DBT_TARGET: stg
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: profiles.ci.yml を profiles.yml としてコピー
+        run: cp profiles.ci.yml profiles.yml
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DBT_SA_EMAIL_STG }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dbt
+        run: pip install dbt-bigquery
+
+      - name: Install dbt packages
+        run: dbt deps
+
+      - name: dbt seed (stg)
+        run: "dbt seed --target stg --vars '{\"load_source_data\": true}'"
+
+      - name: dbt run (stg)
+        run: dbt run --target stg
+
+      - name: dbt test (stg)
+        run: dbt test --target stg
+
+  # ---------- CD prd: v* tag ----------
+
+  tf-apply-prd:
+    name: tf apply / prd
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'prd')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+          token_format: "access_token"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9"
+          terraform_wrapper: false
+
+      - name: Terraform Init (prd)
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET_PRD }}" \
+            -reconfigure \
+            -input=false
+
+      - name: Terraform Apply (prd)
+        run: |
+          terraform apply \
+            -var-file=config.tfvars \
+            -var="env=prd" \
+            -auto-approve \
+            -input=false
+
+  dbt-run-prd:
+    name: dbt run & test / prd
+    needs: tf-apply-prd
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      DBT_PROFILES_DIR: .
+      DBT_TARGET: prd
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: profiles.ci.yml を profiles.yml としてコピー
+        run: cp profiles.ci.yml profiles.yml
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DBT_SA_EMAIL }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dbt
+        run: pip install dbt-bigquery
+
+      - name: Install dbt packages
+        run: dbt deps
+
+      - name: dbt seed (prd)
+        run: "dbt seed --target prd --vars '{\"load_source_data\": true}'"
+
+      - name: dbt run (prd)
+        run: dbt run --target prd
+
+      - name: dbt test (prd)
+        run: dbt test --target prd
