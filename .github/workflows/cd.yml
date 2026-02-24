@@ -84,7 +84,7 @@ jobs:
           terraform apply \
             -var-file=config.tfvars \
             -var="env=dev" \
-            -var="infra_state_bucket=${{ secrets.INFRA_STATE_BUCKET_DEV }}" \
+            -var="dbt_sa_email=${{ secrets.DBT_SA_EMAIL_DEV }}" \
             -auto-approve \
             -input=false
 
@@ -179,7 +179,7 @@ jobs:
           terraform apply \
             -var-file=config.tfvars \
             -var="env=stg" \
-            -var="infra_state_bucket=${{ secrets.INFRA_STATE_BUCKET_STG }}" \
+            -var="dbt_sa_email=${{ secrets.DBT_SA_EMAIL_STG }}" \
             -auto-approve \
             -input=false
 
@@ -272,7 +272,7 @@ jobs:
           terraform apply \
             -var-file=config.tfvars \
             -var="env=prd" \
-            -var="infra_state_bucket=${{ secrets.INFRA_STATE_BUCKET_PRD }}" \
+            -var="dbt_sa_email=${{ secrets.DBT_SA_EMAIL }}" \
             -auto-approve \
             -input=false
 

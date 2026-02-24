@@ -27,13 +27,7 @@ variable "environments" {
 }
 
 
-variable "infra_state_bucket" {
-  description = "{client}-infra リポジトリの Terraform リモートステートを格納する GCS バケット名"
+variable "dbt_sa_email" {
+  description = "dbt 実行 SA のメールアドレス（CI から -var で注入）"
   type        = string
-}
-
-variable "infra_state_prefix" {
-  description = "インフラ用ステートバケット内の GCS プレフィックス（例: 'infra'）"
-  type        = string
-  default     = "infra"
 }

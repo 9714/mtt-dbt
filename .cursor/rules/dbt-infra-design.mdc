@@ -1,0 +1,123 @@
+---
+description: dbt リポジトリで管理するインフラリソース（BigQuery・GCS・SA）の設計指針
+alwaysApply: true
+---
+
+# dbt インフラ設計指針
+
+このリポジトリは dbt プロジェクトと、**dbt に関わるインフラリソース**（GCS・BigQuery IAM）を一元管理する。
+インフラ定義は `infra/` ディレクトリに配置し、dbt モデルの変更と同じリポジトリ・同じ PR で完結させる。
+
+## 責務範囲
+
+| リソース | 管理場所 | 理由 |
+|----------|----------|------|
+| BigQuery IAM（プロジェクトレベル） | `infra/` (このリポジトリ) | dbt SA のクエリ実行・読み書き権限を管理するため |
+| dbt artifacts 用 GCS バケット | `infra/` (このリポジトリ) | dbt の成果物管理のため dbt リポジトリで管理 |
+| dbt docs 用 GCS バケット | `infra/` (このリポジトリ) | ドキュメントのホスティング先を dbt リポジトリで管理 |
+| BigQuery データセット | 管理しない | `dbt run` 時に自動作成されるため |
+| Service Account（dbt / Cloud Run / Workflows） | `{client}-infra` リポジトリ | GCP プロジェクト全体の SA 管理のため infra リポジトリで管理 |
+| Artifact Registry | `{client}-infra` リポジトリ | Cloud Run Images push/pull より前に必要なため |
+| Cloud Run Job / Workflows | `{client}-pipeline` リポジトリ | パイプライン実行の管理のため |
+
+## infra/ ディレクトリ構成
+
+```
+infra/
+├── terraform.tf    # required_version・required_providers・backend・provider を統合
+├── main.tf         # locals + 全リソース定義
+├── variables.tf    # 変数定義（alphabetical）
+├── outputs.tf      # 出力値（alphabetical）
+├── config.tfvars   # 全環境の変数値
+└── tests/
+    └── validation_unit_test.tftest.hcl  # mock unit test（GCP 認証不要）
+```
+
+## 設計原則
+
+1. **責務分離**: dbt に関わるリソースのみをこのリポジトリで管理する
+2. **汎用性**: 案件固有の値は変数で注入し、ハードコードしない
+3. **環境切り替え**: `config.tfvars` + `-var "env=..."` で dev / stg / prd を切り替える
+4. **client_name の管理**: `.tfvars` 内では変数参照不可のためリテラルで記載する。CI で `-var "client_name=xxx"` による上書きも可能
+5. **dbt SA は外部参照**: `dbt_sa_email` は `{client}-infra` リポジトリの remote state から `data "terraform_remote_state"` で取得する
+
+## 手動作成リソース（初回セットアップ）
+
+以下は **Terraform 実行前に手動で作成**する。Terraform の実行自体に必要なため自動化できない（鶏と卵問題）。
+
+| リソース | 理由 | 命名規則 |
+|----------|------|----------|
+| Terraform state 用 GCS バケット | `terraform init` より前に存在が必要 | `{client_name}-dbt-tfstate-{env}` |
+| Terraform 実行 SA + WIF | SA は CI/CD が GCP を操作するアイデンティティ。WIF は GitHub Actions の OIDC トークンをその SA に紐付ける認証経路。両者はセットで手動作成する | SA: `{client_name}-{env}-terraform@...` |
+
+> **WIF と SA の関係**
+> WIF（Workload Identity Pool + Provider）は SA そのものではなく、「GitHub Actions の OIDC トークンを SA に成りすます（impersonate）ための認証経路」。
+> SA なしでは WIF も機能しないため、常にセットで作成する。
+
+### Terraform state バケットの作成コマンド
+
+```shell
+# dev / stg / prd の 3 環境分作成する
+gcloud storage buckets create gs://mtt-dbt-tfstate-dev \
+  --project=mtt-dev \
+  --location=asia-northeast1 \
+  --uniform-bucket-level-access
+```
+
+### Terraform 実行 SA に必要な権限
+
+- `roles/bigquery.admin`
+- `roles/storage.admin`
+- `roles/resourcemanager.projectIamAdmin`
+
+## BigQuery 設計方針
+
+- データセットは `dbt run` 時に自動作成されるため Terraform では管理しない（location は US のまま運用）
+- Terraform ではプロジェクトレベルの IAM のみ管理する
+  - `bigquery.jobUser`（クエリ実行）
+  - `bigquery.dataEditor`（全データセットへの読み書き）
+- BI ツール等の参照権限が必要になった場合は `infra/main.tf` に `google_bigquery_dataset_iam_member` を個別追加する
+
+## GCS 設計方針
+
+| バケット | 命名規則 | 用途 |
+|----------|----------|------|
+| artifacts | `{client_name}-{env}-dbt-artifacts` | `manifest.json`・`catalog.json` 等の保存先。バージョニング有効。 |
+| docs | `{client_name}-{env}-dbt-docs` | `dbt docs generate` の出力先。ドキュメントのホスティングに使用。 |
+
+- 両バケットとも均一アクセス制御（uniform bucket-level access）を適用する
+- dbt SA には両バケットに `storage.objectAdmin` を付与する
+
+## SA 取得方針
+
+- dbt SA は手動作成済みのものを使用する（`{client}-infra` リポジトリとは独立）
+- SA の email は GitHub Secrets（`DBT_SA_EMAIL_DEV` / `DBT_SA_EMAIL_STG` / `DBT_SA_EMAIL`）に登録し、CI/CD から `-var "dbt_sa_email=..."` で Terraform に注入する
+- `data "terraform_remote_state"` は使用しない
+
+## ブランチ戦略と環境デプロイ
+
+| トリガー | 対象環境 | CI/CD |
+|----------|----------|-------|
+| `feature-*` ブランチを push | dev | PR で fmt / validate / test（mock）・plan（dev）を実行 |
+| `feature-*` → `main` へのマージ | stg | Terraform apply（stg）を自動実行 |
+| タグ付け（例: `v1.2.3`） | prd | Terraform apply（prd）を自動実行 |
+
+## Terraform コマンド
+
+```shell
+# dev（リポジトリルートから実行）
+terraform -chdir=infra init \
+  -backend-config="bucket=mtt-dbt-tfstate-dev" \
+  -reconfigure
+
+terraform -chdir=infra plan \
+  -var-file=config.tfvars \
+  -var="env=dev"
+
+terraform -chdir=infra apply \
+  -var-file=config.tfvars \
+  -var="env=dev"
+
+# ユニットテストの実行（GCP 認証不要）
+terraform -chdir=infra test -verbose
+```

@@ -4,18 +4,6 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# リモートステート: {client}-infra リポジトリから dbt SA のメールアドレスを取得
-# ---------------------------------------------------------------------------
-data "terraform_remote_state" "infra" {
-  backend = "gcs"
-
-  config = {
-    bucket = var.infra_state_bucket
-    prefix = var.infra_state_prefix
-  }
-}
-
-# ---------------------------------------------------------------------------
 # BigQuery IAM
 # データセットは dbt run 時に自動作成される（location は US）。
 # Terraform ではプロジェクトレベルの IAM のみ管理する。
@@ -25,14 +13,14 @@ data "terraform_remote_state" "infra" {
 resource "google_project_iam_member" "dbt_bq_job_user" {
   project = local.config.project_id
   role    = "roles/bigquery.jobUser"
-  member  = "serviceAccount:${data.terraform_remote_state.infra.outputs.dbt_sa_email}"
+  member  = "serviceAccount:${var.dbt_sa_email}"
 }
 
 # dbt SA にプロジェクトレベルの BigQuery Data Editor を付与（全データセットへの読み書きに必要）
 resource "google_project_iam_member" "dbt_bq_data_editor" {
   project = local.config.project_id
   role    = "roles/bigquery.dataEditor"
-  member  = "serviceAccount:${data.terraform_remote_state.infra.outputs.dbt_sa_email}"
+  member  = "serviceAccount:${var.dbt_sa_email}"
 }
 
 # ---------------------------------------------------------------------------
@@ -54,7 +42,7 @@ resource "google_storage_bucket" "dbt_artifacts" {
 resource "google_storage_bucket_iam_member" "dbt_artifacts_admin" {
   bucket = google_storage_bucket.dbt_artifacts.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${data.terraform_remote_state.infra.outputs.dbt_sa_email}"
+  member = "serviceAccount:${var.dbt_sa_email}"
 }
 
 # ---------------------------------------------------------------------------
@@ -72,5 +60,5 @@ resource "google_storage_bucket" "dbt_docs" {
 resource "google_storage_bucket_iam_member" "dbt_docs_admin" {
   bucket = google_storage_bucket.dbt_docs.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${data.terraform_remote_state.infra.outputs.dbt_sa_email}"
+  member = "serviceAccount:${var.dbt_sa_email}"
 }
