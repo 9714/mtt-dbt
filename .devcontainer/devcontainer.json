@@ -1,0 +1,39 @@
+{
+  "name": "mtt-dbt (BigQuery)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "postCreateCommand": "dbt deps",
+  "postStartCommand": "bash .devcontainer/init.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbt-labs.dbt-power-user",
+        "innoverio.vscode-dbt-power-user",
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "mtxr.sqltools",
+        "dorzey.vscode-sqlfluff",
+        "samuelcolvin.jinjahtml"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "files.associations": {
+          "*.sql": "jinja-sql"
+        },
+        "[jinja-sql]": {
+          "editor.defaultFormatter": "dbt-labs.dbt-power-user"
+        }
+      }
+    }
+  },
+  "remoteEnv": {
+    "GOOGLE_APPLICATION_CREDENTIALS": "/root/.config/gcloud/application_default_credentials.json",
+    "GITHUB_PERSONAL_ACCESS_TOKEN": "${localEnv:GITHUB_PERSONAL_ACCESS_TOKEN}"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {}
+  }
+}

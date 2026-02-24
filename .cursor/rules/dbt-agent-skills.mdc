@@ -1,0 +1,31 @@
+---
+description: 必要なタイミングで適切な dbt Agent スキルを使用する
+alwaysApply: true
+---
+
+# dbt Agent スキルの使い分け
+
+dbt 関連のタスクでは、必ず該当するスキルを **Read で読み込んでから** 実行すること。
+
+## スキル選択フロー
+
+| ユーザーの意図・タスク | 使用するスキル | パス |
+|----------------------|----------------|------|
+| モデルの作成・修正、エラー調査、データソース探索、テスト追加、変更影響の評価 | `using-dbt-for-analytics-engineering` | `.cursor/agents/skills/using-dbt-for-analytics-engineering/SKILL.md` |
+| dbt のドキュメント参照、機能の調べ物、dbt Cloud/Core/Semantic Layer の質問 | `fetching-dbt-docs` | `.cursor/agents/skills/fetching-dbt-docs/SKILL.md` |
+| ユニットテストの追加、TDD | `adding-dbt-unit-test` | `.cursor/agents/skills/adding-dbt-unit-test/SKILL.md` |
+| dbt コマンドの実行（run, test, build, compile, show など）、コマンドの書き方 | `running-dbt-commands` | `.cursor/agents/skills/running-dbt-commands/SKILL.md` |
+| セマンティックモデル、メトリクス、ディメンションの作成・修正 | `building-dbt-semantic-layer` | `.cursor/agents/skills/building-dbt-semantic-layer/SKILL.md` |
+| ビジネス質問への回答（例：「先四半期の売上合計は？」） | `answering-natural-language-questions-with-dbt` | `.cursor/agents/skills/answering-natural-language-questions-with-dbt/SKILL.md` |
+| dbt MCP サーバーのセットアップ・設定・トラブルシュート | `configuring-dbt-mcp-server` | `.cursor/agents/skills/configuring-dbt-mcp-server/SKILL.md` |
+
+## 実行ルール
+
+1. **タスクに合うスキルを選ぶ**: 上記フローで該当するスキルを特定する
+2. **スキルを読み込む**: `Read` で該当 SKILL.md を開く
+3. **スキルに従って実行する**: スキル内の手順・ベストプラクティスに沿って作業する
+4. **複数が当てはまる場合**: 主タスクに最も近いスキルを優先し、必要なら他も参照する
+
+## 注意
+
+- `answering-natural-language-questions-with-dbt`: ビジネス質問への回答専用。モデル開発・検証には使わない
