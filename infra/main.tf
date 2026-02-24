@@ -15,22 +15,6 @@ resource "google_service_account_iam_member" "dbt_wi_user" {
 }
 
 # ---------------------------------------------------------------------------
-# BigQuery
-# dbt seed は run より先に実行されるため、raw データセットのみ Terraform で事前作成する。
-# ---------------------------------------------------------------------------
-
-resource "google_bigquery_dataset" "dbt_raw" {
-  project    = local.config.project_id
-  dataset_id = local.bq_raw_dataset
-  location   = "US" # dbt profiles の location と一致させる
-
-  labels = {
-    env        = var.env
-    managed_by = "terraform"
-  }
-}
-
-# ---------------------------------------------------------------------------
 # BigQuery IAM
 # ---------------------------------------------------------------------------
 
