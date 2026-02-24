@@ -67,8 +67,9 @@ gcloud storage buckets create gs://mtt-dbt-tfstate-dev \
 ### Terraform 実行 SA に必要な権限
 
 - `roles/bigquery.admin`
-- `roles/storage.admin`
+- `roles/iam.serviceAccountAdmin`
 - `roles/resourcemanager.projectIamAdmin`
+- `roles/storage.admin`
 
 ## BigQuery 設計方針
 
