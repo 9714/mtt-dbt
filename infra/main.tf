@@ -5,7 +5,6 @@ resource "google_service_account" "dbt" {
   project      = local.config.project_id
   account_id   = "${local.prefix}-dbt"
   display_name = "dbt SA (${var.env})"
-  labels       = local.common_labels
 }
 
 # GitHub Actions（WIF）が dbt SA を直接使用できるよう Workload Identity User 権限を付与
