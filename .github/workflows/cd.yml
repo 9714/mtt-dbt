@@ -33,6 +33,17 @@ on:
       - "package-lock.yml"
       - ".github/workflows/**"
 
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "デプロイ対象環境"
+        required: true
+        type: choice
+        options:
+          - dev
+          - stg
+          - prd
+
 # ---------------------------------------------------------------------------
 # dev: CI 完了後（feature-* ブランチ）
 # ---------------------------------------------------------------------------
