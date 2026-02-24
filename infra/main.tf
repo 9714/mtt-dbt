@@ -5,6 +5,7 @@ resource "google_service_account" "dbt" {
   project      = local.config.project_id
   account_id   = "${local.prefix}-dbt"
   display_name = "dbt SA (${var.env})"
+  labels       = local.common_labels
 }
 
 # GitHub Actions（WIF）が dbt SA を直接使用できるよう Workload Identity User 権限を付与
@@ -41,6 +42,7 @@ resource "google_storage_bucket" "dbt_artifacts" {
   location                    = local.config.location
   uniform_bucket_level_access = true
   force_destroy               = false
+  labels                      = local.common_labels
 
   versioning {
     enabled = true
@@ -63,6 +65,7 @@ resource "google_storage_bucket" "dbt_docs" {
   location                    = local.config.location
   uniform_bucket_level_access = true
   force_destroy               = false
+  labels                      = local.common_labels
 }
 
 # dbt SA に docs バケットの Object Admin 権限を付与（ドキュメントのアップロードに必要）
