@@ -1,0 +1,52 @@
+name: CD / dbt / prd
+
+# 起動条件:
+#   1. cd-tf-prd 完了後（タグ付け時の順序制御）
+#   2. v* タグ push での直接起動（tf がスキップされた場合）
+# dbt run & test (prd)
+
+on:
+  workflow_run:
+    workflows: ["CD / tf / prd"]
+    types: [completed]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+
+  dbt-run-prd:
+    name: dbt run & test / prd
+    # workflow_run 経由の場合は tf が成功していることを確認する
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DBT_PROFILES_DIR: .
+      DBT_TARGET: prd
+    steps:
+      - uses: actions/checkout@v4
+      - name: profiles.ci.yml を profiles.yml としてコピー
+        run: cp profiles.ci.yml profiles.yml
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DBT_SA_EMAIL }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dbt
+        run: pip install dbt-bigquery
+      - name: Install dbt packages
+        run: dbt deps
+      - name: dbt seed (prd)
+        run: "dbt seed --target prd --vars '{\"load_source_data\": true}'"
+      - name: dbt run (prd)
+        run: dbt run --target prd
+      - name: dbt test (prd)
+        run: dbt test --target prd
