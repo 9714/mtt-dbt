@@ -19,6 +19,17 @@ on:
       - "package-lock.yml"
       - ".sqlfluff"
       - ".github/workflows/**"
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "デプロイ先の環境"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - stg
+          - prd
 
 # ---------------------------------------------------------------------------
 # feature-*: lint → tf-validate → tf-plan → tf-apply/dev → dbt-run/dev
@@ -130,7 +141,10 @@ jobs:
 
   tf-apply-dev:
     name: tf apply / dev
-    needs: tf-plan-dev
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feature-') && needs.tf-plan-dev.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'dev')
+    needs: [tf-plan-dev]
     runs-on: ubuntu-latest
 
     permissions:
@@ -221,7 +235,9 @@ jobs:
 
   tf-apply-stg:
     name: tf apply / stg
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'stg')
     runs-on: ubuntu-latest
 
     permissions:
@@ -312,7 +328,9 @@ jobs:
 
   tf-apply-prd:
     name: tf apply / prd
-    if: github.ref_type == 'tag'
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.env == 'prd')
     runs-on: ubuntu-latest
 
     permissions:
