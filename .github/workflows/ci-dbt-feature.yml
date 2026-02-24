@@ -1,0 +1,69 @@
+name: CI / dbt / feature
+
+# feature-* ブランチへの push で起動（dbt 関連ファイル変更時のみ）
+# SQLFluff lint → dbt run & test (dev)
+
+on:
+  push:
+    branches:
+      - "feature-*"
+    paths:
+      - "models/**"
+      - "macros/**"
+      - "seeds/**"
+      - "data-tests/**"
+      - "snapshots/**"
+      - "dbt_project.yml"
+      - "packages.yml"
+      - "package-lock.yml"
+      - ".sqlfluff"
+      - ".github/workflows/ci-dbt-feature.yml"
+
+jobs:
+
+  lint:
+    name: SQLFluff lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: SQLFluff lint
+        run: |
+          pip install "sqlfluff==3.3.1" "sqlfluff-templater-dbt==3.3.1"
+          sqlfluff lint models/ --dialect bigquery --templater jinja --ignore parsing,templating
+
+  dbt-run-dev:
+    name: dbt run & test / dev
+    needs: [lint]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DBT_PROFILES_DIR: .
+      DBT_TARGET: dev
+    steps:
+      - uses: actions/checkout@v4
+      - name: profiles.ci.yml を profiles.yml としてコピー
+        run: cp profiles.ci.yml profiles.yml
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DBT_SA_EMAIL_DEV }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dbt
+        run: pip install dbt-bigquery
+      - name: Install dbt packages
+        run: dbt deps
+      - name: dbt seed (dev)
+        run: "dbt seed --target dev --vars '{\"load_source_data\": true}'"
+      - name: dbt run (dev)
+        run: dbt run --target dev
+      - name: dbt test (dev)
+        run: dbt test --target dev

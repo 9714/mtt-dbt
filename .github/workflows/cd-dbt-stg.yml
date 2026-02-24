@@ -1,0 +1,54 @@
+name: CD / dbt / stg
+
+# main ブランチへのマージで起動（dbt 関連ファイル変更時のみ）
+# dbt run & test (stg)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "models/**"
+      - "macros/**"
+      - "seeds/**"
+      - "data-tests/**"
+      - "snapshots/**"
+      - "dbt_project.yml"
+      - "packages.yml"
+      - "package-lock.yml"
+      - ".sqlfluff"
+      - ".github/workflows/cd-dbt-stg.yml"
+  workflow_dispatch:
+
+jobs:
+
+  dbt-run-stg:
+    name: dbt run & test / stg
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      DBT_PROFILES_DIR: .
+      DBT_TARGET: stg
+    steps:
+      - uses: actions/checkout@v4
+      - name: profiles.ci.yml を profiles.yml としてコピー
+        run: cp profiles.ci.yml profiles.yml
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.DBT_SA_EMAIL_STG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dbt
+        run: pip install dbt-bigquery
+      - name: Install dbt packages
+        run: dbt deps
+      - name: dbt seed (stg)
+        run: "dbt seed --target stg --vars '{\"load_source_data\": true}'"
+      - name: dbt run (stg)
+        run: dbt run --target stg
+      - name: dbt test (stg)
+        run: dbt test --target stg
