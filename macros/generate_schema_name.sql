@@ -1,23 +1,20 @@
 {% macro generate_schema_name(custom_schema_name, node) %}
 
-    {% set default_schema = target.schema %}
+    {% set schema = custom_schema_name | trim if custom_schema_name else target.schema %}
+    {% set client = var('client_name') %}
 
-    {# seeds go in a global `raw` schema #}
     {% if node.resource_type == 'seed' %}
-        {{ custom_schema_name | trim }}
+        {# seed は常に {client_name}_raw（環境 suffix なし） #}
+        {{ client }}_raw
 
-    {# non-specified schemas go to the default target schema #}
-    {% elif custom_schema_name is none %}
-        {{ default_schema }}
+    {% elif target.name == 'prd' %}
+        {# prd は suffix なし: {client_name}_{schema} #}
+        {{ client }}_{{ schema }}
 
-
-    {# specified custom schema names go to the schema name prepended with the the default schema name in prod (as this is an example project we want the schemas clearly labeled) #}
-    {% elif target.name == 'prod' %}
-        {{ default_schema }}_{{ custom_schema_name | trim }}
-
-    {# specified custom schemas go to the default target schema for non-prod targets #}
     {% else %}
-        {{ default_schema }}
+        {# dev / stg はその他の環境は suffix あり: {client_name}_{schema}_{target.name} #}
+        {{ client }}_{{ schema }}_{{ target.name }}
+
     {% endif %}
 
 {% endmacro %}

@@ -1,0 +1,38 @@
+default:
+  target: "{{ env_var('DBT_TARGET') }}"
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      impersonate_service_account: mtt-dev-dbt@sandbox-nonprd.iam.gserviceaccount.com
+      project: sandbox-nonprd
+      dataset: dev
+      location: US
+      threads: 4
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive
+
+    stg:
+      type: bigquery
+      method: oauth
+      impersonate_service_account: mtt-stg-dbt@sandbox-nonprd.iam.gserviceaccount.com
+      project: sandbox-nonprd
+      dataset: stg
+      location: US
+      threads: 4
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive
+
+    prd:
+      type: bigquery
+      method: oauth
+      impersonate_service_account: mtt-prd-dbt@mtt-prd.iam.gserviceaccount.com
+      project: mtt-prd
+      dataset: prd
+      location: US
+      threads: 4
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      priority: interactive
