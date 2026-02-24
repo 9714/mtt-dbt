@@ -1,15 +1,9 @@
 name: CD / tf / stg
 
-# main ブランチへのマージで起動（infra/** 変更時のみ）
+# 手動起動のみ
 # tf apply(stg)
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "infra/**"
-      - ".github/workflows/cd-tf-stg.yml"
   workflow_dispatch:
 
 jobs:

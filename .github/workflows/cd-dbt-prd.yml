@@ -1,14 +1,9 @@
 name: CD / dbt / prd
 
-# 起動条件:
-#   1. cd-tf-prd 完了後（タグ付け時の順序制御）
-#   2. v* タグ push での直接起動（tf がスキップされた場合）
+# v* タグ付けで起動
 # dbt run & test (prd)
 
 on:
-  workflow_run:
-    workflows: ["CD / tf / prd"]
-    types: [completed]
   push:
     tags:
       - "v*"
@@ -18,10 +13,6 @@ jobs:
 
   dbt-run-prd:
     name: dbt run & test / prd
-    # workflow_run 経由の場合は tf が成功していることを確認する
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read

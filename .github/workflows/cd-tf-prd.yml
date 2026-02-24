@@ -1,12 +1,9 @@
 name: CD / tf / prd
 
-# v* タグ付けで起動
+# 手動起動のみ
 # tf apply(prd)
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
 
 jobs:

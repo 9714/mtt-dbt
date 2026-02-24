@@ -1,15 +1,10 @@
 name: CI / tf / feature
 
-# feature-* ブランチへの push で起動（infra/** 変更時のみ）
+# 手動起動のみ
 # fmt / validate → plan(dev) → apply(dev)
 
 on:
-  push:
-    branches:
-      - "feature-*"
-    paths:
-      - "infra/**"
-      - ".github/workflows/ci-tf-feature.yml"
+  workflow_dispatch:
 
 jobs:
 

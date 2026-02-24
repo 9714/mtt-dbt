@@ -1,15 +1,9 @@
 name: CD / dbt / stg
 
-# 起動条件:
-#   1. cd-tf-stg 完了後（infra 変更があった場合の順序制御）
-#   2. main push で dbt 関連ファイルのみ変更された場合（tf スキップ時の直接起動）
+# main ブランチへのマージで起動（dbt 関連ファイル変更時のみ）
 # dbt run & test (stg)
 
 on:
-  workflow_run:
-    workflows: ["CD / tf / stg"]
-    types: [completed]
-    branches: [main]
   push:
     branches:
       - main
@@ -30,10 +24,6 @@ jobs:
 
   dbt-run-stg:
     name: dbt run & test / stg
-    # workflow_run 経由の場合は tf が成功していることを確認する
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
