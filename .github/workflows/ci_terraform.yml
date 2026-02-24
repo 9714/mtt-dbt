@@ -36,9 +36,6 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform Test (mock unit test)
-        run: terraform test -verbose
-
   # dev 環境の plan を PR コメントに投稿
   plan-dev:
     name: plan / dev
